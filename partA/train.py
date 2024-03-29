@@ -5,6 +5,7 @@ import random
 import argparse
 import numpy as np
 from torchvision.io import read_image
+from torchvision.transforms import Resize
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -19,7 +20,7 @@ class ImageDataset(Dataset):
         image = read_image(self.image_paths[idx])
         label = self.labels[idx]
         if self.transform:
-            pass
+            image = self.transform(image)
         return image, label
 
 def main(args: argparse.Namespace):
@@ -75,12 +76,13 @@ if __name__ == "__main__":
     # xvalid, yvalid = xvalid[valid_idx], yvalid[valid_idx]
     # xtest, ytest = xtest[test_idx], ytest[test_idx]
 
-    train_dataset = ImageDataset(xtrain, ytrain)
-    valid_dataset = ImageDataset(xvalid, yvalid)
-    test_dataset = ImageDataset(xtest, ytest)
+    train_dataset = ImageDataset(xtrain, ytrain, Resize((256,256)))
+    valid_dataset = ImageDataset(xvalid, yvalid, Resize((256,256)))
+    test_dataset = ImageDataset(xtest, ytest, Resize((256,256)))
 
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
     xb, yb = next(iter(train_dataloader))
     print(yb)
+
     main(args)
