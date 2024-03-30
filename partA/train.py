@@ -2,12 +2,14 @@ import os
 import sys
 import torch
 import random
+import logging
 import argparse
 import numpy as np
 from torchvision.io import read_image
 from torchvision.transforms import Resize
 from torch.utils.data import Dataset, DataLoader
 
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 class ImageDataset(Dataset):
     def __init__(self, image_paths, labels, transform=None):
@@ -39,6 +41,7 @@ if __name__ == "__main__":
                         default="dataset/inaturalist_12K/",
                         help="Path to downloaded data")
     args = parser.parse_args()
+    logging.info(args)
 
     # prepare data
     dataset_path = os.path.abspath(args.dataset_path)
@@ -67,22 +70,12 @@ if __name__ == "__main__":
                 xtest += images
                 ytest += [labels_to_idx[cls]] * n_images
 
-    # shuffle data
-    # train_idx = torch.randperm(len(xtrain))
-    # valid_idx = torch.randperm(len(xvalid))
-    # test_idx = torch.randperm(len(xtest))
-    
-    # xtrain, ytrain = xtrain[train_idx], ytrain[train_idx]
-    # xvalid, yvalid = xvalid[valid_idx], yvalid[valid_idx]
-    # xtest, ytest = xtest[test_idx], ytest[test_idx]
-
     train_dataset = ImageDataset(xtrain, ytrain, Resize((256,256)))
     valid_dataset = ImageDataset(xvalid, yvalid, Resize((256,256)))
     test_dataset = ImageDataset(xtest, ytest, Resize((256,256)))
 
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-    xb, yb = next(iter(train_dataloader))
-    print(yb)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=64, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
     main(args)
