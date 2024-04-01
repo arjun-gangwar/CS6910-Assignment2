@@ -32,14 +32,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-uw",
                         "--use_wandb",
-                        type=str,
-                        default="false",
-                        help="Use Weights and Biases or not; [true, false]")
+                        default=False,
+                        action="store_true",
+                        help="Use Weights and Biases or not")
     parser.add_argument("-dp",
                         "--dataset_path",
                         type=str,
                         default="dataset/inaturalist_12K/",
                         help="Path to downloaded data")
+    parser.add_argument("-in",
+                        "--in_dims",
+                        type=int,
+                        default=256,
+                        help="Input dimensions of images")
+    parser.add_argument("-bn",
+                        "--use_batch_norm",
+                        default=False,
+                        action="store_true",
+                        help="Use Batch Normalization or not")
+    parser.add_argument("-bs",
+                        "--batch_size",
+                        type=int,
+                        default=64,
+                        help="Batch Size for training")
     args = parser.parse_args()
     logging.info(args)
 
@@ -70,12 +85,12 @@ if __name__ == "__main__":
                 xtest += images
                 ytest += [labels_to_idx[cls]] * n_images
 
-    train_dataset = ImageDataset(xtrain, ytrain, Resize((256,256)))
-    valid_dataset = ImageDataset(xvalid, yvalid, Resize((256,256)))
-    test_dataset = ImageDataset(xtest, ytest, Resize((256,256)))
+    train_dataset = ImageDataset(xtrain, ytrain, Resize((args.in_dims, args.in_dims)))
+    valid_dataset = ImageDataset(xvalid, yvalid, Resize((args.in_dims, args.in_dims)))
+    test_dataset = ImageDataset(xtest, ytest, Resize((args.in_dims, args.in_dims)))
 
-    train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=64, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    
     main(args)
