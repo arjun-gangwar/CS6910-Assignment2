@@ -10,12 +10,15 @@ class ConvBlock(nn.Module):
                  kernel_size, 
                  **kwargs):
         super(ConvBlock, self).__init__()
+        self.batch_norm = batch_norm
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, **kwargs)
-        if batch_norm:
-            self.bn = nn.BatchNorm2d(out_channels)
+        self.bn = nn.BatchNorm2d(out_channels)
         self.activation = activation
+
     def forward(self, x):
-        return self.activation(self.bn(self.conv(x)))
+        if self.batch_norm:
+            return self.activation(self.bn(self.conv(x)))
+        return self.activation(self.conv(x))
 
 class ConvNeuralNet(nn.Module):
     def __init__(self,
@@ -41,39 +44,51 @@ class ConvNeuralNet(nn.Module):
                                batch_norm=self.batch_norm,
                                in_channels=self.in_dims,
                                out_channels=16,
-                               kernel_size=7)
-        self.maxpool1 = nn.MaxPool2d(kernel_size=3)
+                               kernel_size=7,
+                               padding=3,
+                               stride=2)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.conv2 = ConvBlock(activation=self.activation_func,
                                batch_norm=self.batch_norm,
                                in_channels=self.in_dims,
-                               out_channels=16,
-                               kernel_size=7)
-        self.maxpool2 = nn.MaxPool2d()
+                               out_channels=32,
+                               kernel_size=5,
+                               padding=2,
+                               stride=2)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.conv3 = ConvBlock(activation=self.activation_func,
                                batch_norm=self.batch_norm,
                                in_channels=self.in_dims,
-                               out_channels=16,
-                               kernel_size=7)
-        self.maxpool3 = nn.MaxPool2d()
+                               out_channels=64,
+                               kernel_size=5,
+                               padding=2,
+                               stride=1)
+        self.maxpool3 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
 
         self.conv4 = ConvBlock(activation=self.activation_func,
                                batch_norm=self.batch_norm,
                                in_channels=self.in_dims,
-                               out_channels=16,
-                               kernel_size=7)
-        self.maxpool4 = nn.MaxPool2d()
+                               out_channels=128,
+                               kernel_size=3,
+                               padding=1,
+                               stride=2)
+        self.maxpool4 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
 
         self.conv5 = ConvBlock(activation=self.activation_func,
                                batch_norm=self.batch_norm,
                                in_channels=self.in_dims,
-                               out_channels=16,
-                               kernel_size=7)
-        self.maxpool5 = nn.MaxPool2d()
+                               out_channels=256,
+                               kernel_size=7,
+                               padding=1,
+                               stride=1)
+        self.maxpool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
 
-        self.dense = nn.Linear()
+        self.dense = nn.Linear(8*8*256)
         self.softmax = nn.Softmax()
+
+        self.loss = nn.CrossEntropyLoss()
         
 
     def _init_activation(self):
