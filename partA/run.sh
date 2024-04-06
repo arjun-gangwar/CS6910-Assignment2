@@ -4,6 +4,8 @@ dataset_path=dataset/inaturalist_12K/
 in_dims=256
 use_batch_norm=false
 batch_size=64
+n_filter=256
+filter_org=half
 
 opts=
 if ${use_wandb}; then 

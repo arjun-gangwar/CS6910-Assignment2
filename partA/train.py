@@ -5,9 +5,13 @@ import random
 import logging
 import argparse
 import numpy as np
+from torch import nn
+from torch import optim
 from torchvision.io import read_image
 from torchvision.transforms import Resize
 from torch.utils.data import Dataset, DataLoader
+
+from model import ConvNeuralNet
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -26,7 +30,38 @@ class ImageDataset(Dataset):
         return image, label
 
 def main(args: argparse.Namespace):
-    pass
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model = ConvNeuralNet(
+        in_dims=args.in_dims,
+        out_dims=args.out_dims,
+        conv_activation="relu",
+        dense_activation="relu",
+        n_filters=256,
+        filter_org="half",
+        data_aug=True,  # argparse will take, won't be required
+        batch_norm=True,
+        dropout=0.1,
+    )
+
+    model.to(device)
+
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(lr=1e-4, betas=(0.9, 0.99), weight_decay=0.005)
+
+    n_epochs = 20
+    for epoch in range(n_epochs):
+        for xb, yb in train_dataloader:
+            xb = xb.to(device)
+            yb = yb.to(device)
+            y_pred = model(xb)
+            loss = loss_fn(y_pred, yb)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+        
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -26,7 +26,7 @@ class ConvNeuralNet(nn.Module):
                  out_dims,
                  conv_activation: str,
                  dense_activation: str,
-                 n_filters: list,
+                 n_filters: int,
                  filter_org: str,
                  data_aug: bool,  # argparse will take, won't be required
                  batch_norm: bool,
@@ -93,8 +93,6 @@ class ConvNeuralNet(nn.Module):
         self.dense2 = nn.Linear(512, out_dims)
 
         self.softmax = nn.Softmax()
-
-        self.loss = nn.CrossEntropyLoss()
         
 
     def _init_activation(self):
