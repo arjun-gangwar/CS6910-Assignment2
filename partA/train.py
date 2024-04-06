@@ -5,9 +5,11 @@ import random
 import logging
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 from torch import nn
 from torch import optim
 from torchvision.io import read_image
+from torchvision import transforms
 from torchvision.transforms import Resize
 from torch.utils.data import Dataset, DataLoader
 
@@ -25,6 +27,9 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         image = read_image(self.image_paths[idx])
         label = self.labels[idx]
+        image = image / 255
+        if image.shape[0] == 1:       # handle gray scale images
+            image = image.repeat(3,1,1)
         if self.transform:
             image = self.transform(image)
         return image, label
@@ -35,7 +40,7 @@ def main(args: argparse.Namespace):
 
     model = ConvNeuralNet(
         in_dims=args.in_dims,
-        out_dims=args.out_dims,
+        out_dims=10,
         conv_activation="relu",
         dense_activation="relu",
         n_filters=256,
@@ -48,19 +53,39 @@ def main(args: argparse.Namespace):
     model.to(device)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(lr=1e-4, betas=(0.9, 0.99), weight_decay=0.005)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.9, 0.99), weight_decay=0.005)
+    lr_scheduler = optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=1)
 
     n_epochs = 20
     for epoch in range(n_epochs):
+        acc = 0
+        cnt = 0
         for xb, yb in train_dataloader:
             xb = xb.to(device)
             yb = yb.to(device)
             y_pred = model(xb)
+            acc += (torch.argmax(y_pred, 1) == yb).float().sum()
+            cnt += len(yb)
             loss = loss_fn(y_pred, yb)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-        
+            lr_scheduler.step()
+        acc /= cnt
+
+        val_acc = 0
+        cnt = 0
+        with torch.no_grad():
+            for xb, yb in valid_dataloader:
+                xb = xb.to(device)
+                yb = yb.to(device)
+                y_pred = model(xb)
+                val_acc += (torch.argmax(y_pred, 1) == yb).float().sum()
+                cnt += len(yb)
+        val_acc /= cnt
+
+        print("Epoch %d: valid accuracy %.2f%% train accuracy %.2f%% " % (epoch, val_acc*100, acc*100))
+            
 
 
 if __name__ == "__main__":
@@ -120,12 +145,19 @@ if __name__ == "__main__":
                 xtest += images
                 ytest += [labels_to_idx[cls]] * n_images
 
-    train_dataset = ImageDataset(xtrain, ytrain, Resize((args.in_dims, args.in_dims)))
+    transform = transforms.Compose([
+        transforms.Resize((args.in_dims, args.in_dims)),
+        transforms.RandomResizedCrop(size=(args.in_dims, args.in_dims)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    train_dataset = ImageDataset(xtrain, ytrain, transform=transform)
     valid_dataset = ImageDataset(xvalid, yvalid, Resize((args.in_dims, args.in_dims)))
     test_dataset = ImageDataset(xtest, ytest, Resize((args.in_dims, args.in_dims)))
 
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-    
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+
     main(args)

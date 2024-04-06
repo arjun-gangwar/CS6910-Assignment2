@@ -92,7 +92,7 @@ class ConvNeuralNet(nn.Module):
 
         self.dense2 = nn.Linear(512, out_dims)
 
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=1)
         
 
     def _init_activation(self):
@@ -125,7 +125,7 @@ class ConvNeuralNet(nn.Module):
         x = self.maxpool4(x)
         x = self.conv5(x)
         x = self.maxpool5(x)
-        x = x.flatten()
+        x = x.reshape(x.shape[0], -1)
         x = self.dense_activation_func(self.dense1(x))
         x = self.softmax(self.dense2(x))
         return x
