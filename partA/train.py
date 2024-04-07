@@ -17,7 +17,7 @@ from model import ConvNeuralNet
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
-def train(model, loss_fn, optimizer, n_epochs, use_wandb):
+def train(model, loss_fn, optimizer, n_epochs, train_dataloader, valid_dataloader, use_wandb):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     for epoch in range(n_epochs):
@@ -64,6 +64,8 @@ def train(model, loss_fn, optimizer, n_epochs, use_wandb):
                 'train_acc': train_acc*100,
                 'valid_acc': valid_acc*100
             })
+    del loss
+    torch.cuda.empty_cache()
 
 def wandb_sweep():
     with wandb.init() as run:
@@ -81,9 +83,26 @@ def wandb_sweep():
         filter_org = config.filter_org
         batch_norm = config.batch_norm
         dropout = config.dropout
+        data_aug = config.data_aug
 
         run_name=f"bs_{batch_size}_ca_{conv_activation}_fs_{filter_size}_nf_{n_filters}_fo_{filter_org}_ep_{n_epochs}"
         wandb.run.name=run_name
+
+        if data_aug:
+            transform = transforms.Compose([
+                transforms.Resize((in_dims, in_dims)),
+                transforms.RandomResizedCrop(size=(in_dims, in_dims)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        else:
+            transform = transforms.Resize((in_dims, in_dims))
+
+        train_dataset = ImageDataset(xtrain, ytrain, transform=transform)
+        valid_dataset = ImageDataset(xvalid, yvalid, Resize((in_dims, in_dims)))
+
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
         model = ConvNeuralNet(
             in_dims=in_dims,
@@ -99,7 +118,7 @@ def wandb_sweep():
         )
         loss_fn = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.99), weight_decay=weight_decay)
-        train(model, loss_fn, optimizer, n_epochs, True)
+        train(model, loss_fn, optimizer, n_epochs, train_dataloader, valid_dataloader, True)
 
 def main(args: argparse.Namespace):
 
@@ -113,16 +132,16 @@ def main(args: argparse.Namespace):
                 'goal': 'maximize'
             },
             'parameters': {
-                'in_dim': {
+                'in_dims': {
                     'values': [256]
                 },'n_epochs': {
-                    'values': [10,15,20]
+                    'values': [10,15]
                 },'learning_rate': {
                     'values': [1e-3, 1e-4]
                 },'weight_decay': {
                     'values': [0,0.005,0.5]
                 },'batch_size':{
-                    'values': [64,128,256]
+                    'values': [64,128]
                 },'conv_activation':{
                     'values': ['relu','gelu','silu','mish']
                 },'dense_activation':{
@@ -132,20 +151,40 @@ def main(args: argparse.Namespace):
                 },'filter_size':{
                     'values': [[7,5,5,3,3], [3,3,5,5,7], [3,3,3,3,3], [5,5,5,5,5], [7,7,7,7,7]]
                 },'n_filters':{
-                    'values': [16, 32, 64, 128, 256]
+                    'values': [32, 64, 128]
                 },'filter_org':{
                     'values': ['same', 'double', 'halve']
                 },'batch_norm':{
                     'values': [True, False]
                 },'dropout':{
                     'values': [0, 0.2, 0.3]
+                },'data_aug':{
+                    'values': [True, False]
                 }
             }
         }
         sweep_id = wandb.sweep(sweep=sweep_config, project=args.wandb_project)
         wandb.agent(sweep_id, function=wandb_sweep, count=250)
         wandb.finish()
-    else:
+    else:       # not using wandb
+        if args.data_aug:
+            transform = transforms.Compose([
+                transforms.Resize((args.in_dims, args.in_dims)),
+                transforms.RandomResizedCrop(size=(args.in_dims, args.in_dims)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        else:
+            transform = transforms.Resize((args.in_dims, args.in_dims))
+
+        train_dataset = ImageDataset(xtrain, ytrain, transform=transform)
+        valid_dataset = ImageDataset(xvalid, yvalid, Resize((args.in_dims, args.in_dims)))
+        test_dataset = ImageDataset(xtest, ytest, Resize((args.in_dims, args.in_dims)))
+
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+        test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+
         model = ConvNeuralNet(
             in_dims=args.in_dims,
             out_dims=len(classes),
@@ -162,7 +201,7 @@ def main(args: argparse.Namespace):
         optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.9, 0.99), weight_decay=0.005)
         n_epochs = 20
 
-        train(model, loss_fn, optimizer, n_epochs, False)
+        train(model, loss_fn, optimizer, n_epochs, train_dataloader, valid_dataloader, False)
             
 
 
@@ -273,23 +312,5 @@ if __name__ == "__main__":
             elif set == "test":
                 xtest += images
                 ytest += [labels_to_idx[cls]] * n_images
-
-    if args.data_aug:
-        transform = transforms.Compose([
-            transforms.Resize((args.in_dims, args.in_dims)),
-            transforms.RandomResizedCrop(size=(args.in_dims, args.in_dims)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    else:
-        transform = transforms.Resize((args.in_dims, args.in_dims))
-
-    train_dataset = ImageDataset(xtrain, ytrain, transform=transform)
-    valid_dataset = ImageDataset(xvalid, yvalid, Resize((args.in_dims, args.in_dims)))
-    test_dataset = ImageDataset(xtest, ytest, Resize((args.in_dims, args.in_dims)))
-
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     main(args)

@@ -1,0 +1,35 @@
+wandb_version: 1
+
+batch_norm:
+  value: false
+batch_size:
+  value: 128
+conv_activation:
+  value: silu
+data_aug:
+  value: true
+dense_activation:
+  value: relu
+dense_size:
+  value: 256
+dropout:
+  value: 0.3
+filter_org:
+  value: halve
+filter_size:
+  value:
+  - 7
+  - 7
+  - 7
+  - 7
+  - 7
+in_dims:
+  value: 256
+learning_rate:
+  value: 0.001
+n_epochs:
+  value: 10
+n_filters:
+  value: 128
+weight_decay:
+  value: 0

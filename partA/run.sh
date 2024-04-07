@@ -1,18 +1,18 @@
 #!/bin/bash
-use_wandb=false
+use_wandb=true
 wandb_project=CS6910-Assignment2
 wandb_entity=arjungangwar
 dataset_path=dataset/inaturalist_12K/
 in_dims=256
 batch_norm=true
-batch_size=64
+batch_size=256
 n_filters=16
 data_aug=false
 conv_activation=relu
 dense_activation=relu
 dense_size=512
 filter_size=7,5,5,3,3
-filter_org="halve"
+filter_org="double"
 dropout=0
 
 opts=
