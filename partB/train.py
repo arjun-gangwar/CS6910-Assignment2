@@ -14,7 +14,7 @@ from torchvision import transforms
 from torchvision.transforms import Resize
 from torch.utils.data import DataLoader
 from helper import list_of_ints, ImageDataset
-from model import ConvNeuralNet
+from torchvision.models import resnet50, ResNet50_Weights, resnext50_32x4d, ResNeXt50_32X4D_Weights, inception_v3, Inception_V3_Weights
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -77,17 +77,12 @@ def wandb_sweep():
         learning_rate = config.learning_rate
         weight_decay = config.weight_decay
         batch_size = config.batch_size
-        conv_activation = config.conv_activation
-        dense_activation = config.dense_activation
         dense_size = config.dense_size
-        filter_size = config.filter_size
-        n_filters = config.n_filters
-        filter_org = config.filter_org
-        batch_norm = config.batch_norm
         dropout = config.dropout
         data_aug = config.data_aug
+        freeze_option = config.freeze_option
 
-        run_name=f"bs_{batch_size}_ca_{conv_activation}_fs_{filter_size}_nf_{n_filters}_fo_{filter_org}_ep_{n_epochs}"
+        run_name=f"bs_{batch_size}_lr_{learning_rate}_ep_{n_epochs}_wd_{weight_decay}_ds_{dense_size}_do_{dropout}_fr_{freeze_option}"
         wandb.run.name=run_name
 
         if data_aug:
@@ -106,21 +101,30 @@ def wandb_sweep():
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
         valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
-        model = ConvNeuralNet(
-            in_dims=in_dims,
-            out_dims=len(classes),
-            conv_activation=conv_activation,
-            dense_activation=dense_activation,
-            dense_size=dense_size,
-            filter_size=filter_size,
-            n_filters=n_filters,
-            filter_org=filter_org,
-            batch_norm=batch_norm,
-            dropout=dropout,
+        model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+        num_feats = model.fc.in_features
+        model.fc = nn.Sequential(
+            nn.Linear(num_feats, dense_size),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(dense_size, len(classes))
         )
+
+        for param in model.parameters():
+            param.requires_grad=False
+
+        if freeze_option == 0:        # unfreeze fully connected layer
+            for param in model.fc.parameters():
+                param.requires_grad = True
+        elif freeze_option == 1:      # unfreeze fully connected layer + last conv block 
+            for param in model.layer4.parameters():
+                param.requires_grad = True
+            for param in model.fc.parameters():
+                param.requires_grad = True
+        
         loss_fn = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.99), weight_decay=weight_decay)
-        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2)
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=3)
         train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, valid_dataloader, True)
 
 def main(args: argparse.Namespace):
@@ -129,45 +133,35 @@ def main(args: argparse.Namespace):
         wandb.login()
         sweep_config = {
             'method': 'bayes',
-            'name' : 'cnn sweeps Apr 7th',
+            'name' : 'pretrained cnn sweeps Apr 7th',
             'metric': {
                 'name': 'valid_acc',
                 'goal': 'maximize'
             },
             'parameters': {
                 'in_dims': {
-                    'values': [256]
+                    'values': [224]
                 },'n_epochs': {
-                    'values': [10,15]
+                    'values': [5, 10]
                 },'learning_rate': {
                     'values': [1e-3, 1e-4]
                 },'weight_decay': {
                     'values': [0,0.005,0.5]
                 },'batch_size':{
                     'values': [64,128]
-                },'conv_activation':{
-                    'values': ['relu','gelu','silu','mish']
-                },'dense_activation':{
-                    'values': ['relu']
                 },'dense_size':{
                     'values': [256, 512, 1024]
-                },'filter_size':{
-                    'values': [[7,5,5,3,3], [3,3,5,5,7], [3,3,3,3,3], [5,5,5,5,5], [7,7,7,7,7]]
-                },'n_filters':{
-                    'values': [32, 64, 128]
-                },'filter_org':{
-                    'values': ['same', 'double', 'halve']
-                },'batch_norm':{
-                    'values': [True, False]
                 },'dropout':{
-                    'values': [0, 0.2, 0.3]
+                    'values': [0, 0.2, 0.5]
                 },'data_aug':{
                     'values': [True, False]
+                },'freeze_option': {
+                    'values': [0, 1]
                 }
             }
         }
         sweep_id = wandb.sweep(sweep=sweep_config, project=args.wandb_project)
-        wandb.agent(sweep_id, function=wandb_sweep, count=100)
+        wandb.agent(sweep_id, function=wandb_sweep, count=20)
         wandb.finish()
     else:       # not using wandb
         if args.data_aug:
@@ -188,21 +182,30 @@ def main(args: argparse.Namespace):
         valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
         test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
-        model = ConvNeuralNet(
-            in_dims=args.in_dims,
-            out_dims=len(classes),
-            conv_activation=args.conv_activation,
-            dense_activation=args.dense_activation,
-            dense_size=args.dense_size,
-            filter_size=args.filter_size,
-            n_filters=args.n_filters,
-            filter_org=args.filter_org,
-            batch_norm=args.batch_norm,
-            dropout=args.dropout,
+        model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+        num_feats = model.fc.in_features
+        model.fc = nn.Sequential(
+            nn.Linear(num_feats, args.dense_size),
+            nn.ReLU(inplace=True),
+            nn.Dropout(args.dropout),
+            nn.Linear(args.dense_size, len(classes))
         )
+
+        for param in model.parameters():
+            param.requires_grad=False
+
+        if args.freeze_option == 0:        # unfreeze fully connected layer
+            for param in model.fc.parameters():
+                param.requires_grad = True
+        elif args.freeze_option == 1:      # unfreeze fully connected layer + last conv block 
+            for param in model.layer4.parameters():
+                param.requires_grad = True
+            for param in model.fc.parameters():
+                param.requires_grad = True
+
         loss_fn = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.99), weight_decay=args.weight_decay)
-        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2)
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=3)
         n_epochs = args.n_epochs
 
         train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, valid_dataloader, False)
@@ -236,11 +239,6 @@ if __name__ == "__main__":
                         type=int,
                         default=256,
                         help="Input dimensions of images")
-    parser.add_argument("-bn",
-                        "--batch_norm",
-                        default=False,
-                        action="store_true",
-                        help="Use Batch Normalization or not")
     parser.add_argument("-bs",
                         "--batch_size",
                         type=int,
@@ -251,36 +249,11 @@ if __name__ == "__main__":
                         default=False,
                         action="store_true",
                         help="Use Data Augmentation or not")
-    parser.add_argument("-ca",
-                        "--conv_activation",
-                        type=str,
-                        default="relu",
-                        help="Convolution activation")
-    parser.add_argument("-da",
-                        "--dense_activation",
-                        type=str,
-                        default="relu",
-                        help="Dense activation")
     parser.add_argument("-ds",
                         "--dense_size",
                         type=int,
                         default=512,
                         help="Dense layer size")
-    parser.add_argument("-fs",
-                        "--filter_size",
-                        type=list_of_ints,
-                        default=[7,5,5,3,3],
-                        help="Layerwise Filter Size")
-    parser.add_argument("-nf",
-                        "--n_filters",
-                        type=int,
-                        default=16,
-                        help="Number of filter in first layer")
-    parser.add_argument("-fo",
-                        "--filter_org",
-                        type=str,
-                        default="double",
-                        help="Filter Organization")
     parser.add_argument("-do",
                         "--dropout",
                         type=float,
@@ -301,6 +274,11 @@ if __name__ == "__main__":
                         type=float,
                         default=1e-4,
                         help="Learning rate")
+    parser.add_argument("-fr",
+                        "--freeze_option",
+                        type=int,
+                        default=1,
+                        help="Freeze options: [0: unfreeze fc, 1: unfreeze fc + last conv block]")
     args = parser.parse_args()
     logging.info(args)
 

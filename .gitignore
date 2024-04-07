@@ -41,6 +41,7 @@ pip-delete-this-directory.txt
 
 # wandb
 partA/wandb/
+partB/wandb/
 
 # Unit test / coverage reports
 htmlcov/
