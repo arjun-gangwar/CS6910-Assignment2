@@ -73,15 +73,18 @@ def train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, vali
 def test(model, test_dataloader):
     test_acc = 0
     cnt = 0
+    y_test = []
     with torch.no_grad():
         for xb, yb in test_dataloader:
             xb = xb.to(device)
             yb = yb.to(device)
             y_pred = model(xb)
+            y_test += list(torch.argmax(y_pred, 1))
             test_acc += (torch.argmax(y_pred, 1) == yb).float().sum()
             cnt += len(yb)
         test_acc /= cnt
     print("Test Accuracy: %.2f%%" % (test_acc))
+    return y_test
 
 def wandb_sweep():
     with wandb.init() as run:
@@ -220,7 +223,29 @@ def main(args: argparse.Namespace):
         n_epochs = args.n_epochs
 
         train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, valid_dataloader, False)
-        test(model, test_dataloader)
+        y_pred = test(model, test_dataloader)
+
+        # plot sample test images and predictions
+        wandb.init(project=args.wandb_project, entity=args.wandb_entity)
+        wandb.run.name="test_sample_image"
+        n_labels = 10
+        n_samples = 3
+        fig, ax = plt.subplots(nrows=n_labels, ncols=n_samples, figsize=(10,30))
+        fig.tight_layout()
+        plt.subplots_adjust(hspace=0.5)
+        for i in range(n_labels):
+            factor = 200 * i
+            idxs = torch.randperm(200)[:n_samples] + factor
+            for j,idx in enumerate(idxs):
+                img, lbl = test_dataset[idx]
+                ax[i,j].set(title=f"Pred: {idx_to_labels[y_pred[idx].item()]}\nTrue: {idx_to_labels[lbl]}")
+                ax[i,j].imshow(img.numpy().transpose(1,2,0))
+                ax[i,j].set_xticks([])
+                ax[i,j].set_yticks([])
+        plt.savefig("test_samples.png", bbox_inches='tight')
+        wandb.log({"test_sample": fig})
+        wandb.finish()
+        
 
 
 if __name__ == "__main__":
