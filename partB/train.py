@@ -14,7 +14,7 @@ from torchvision import transforms
 from torchvision.transforms import Resize
 from torch.utils.data import DataLoader
 from helper import list_of_ints, ImageDataset
-from torchvision.models import resnet50, ResNet50_Weights, resnext50_32x4d, ResNeXt50_32X4D_Weights, inception_v3, Inception_V3_Weights
+from torchvision.models import resnet50, ResNet50_Weights
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -133,7 +133,7 @@ def main(args: argparse.Namespace):
         wandb.login()
         sweep_config = {
             'method': 'bayes',
-            'name' : 'pretrained cnn sweeps Apr 7th',
+            'name' : 'pretrained cnn Apr 7th - 30',
             'metric': {
                 'name': 'valid_acc',
                 'goal': 'maximize'
@@ -161,7 +161,7 @@ def main(args: argparse.Namespace):
             }
         }
         sweep_id = wandb.sweep(sweep=sweep_config, project=args.wandb_project)
-        wandb.agent(sweep_id, function=wandb_sweep, count=20)
+        wandb.agent(sweep_id, function=wandb_sweep, count=30)
         wandb.finish()
     else:       # not using wandb
         if args.data_aug:
