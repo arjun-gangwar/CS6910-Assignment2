@@ -16,10 +16,10 @@ from torch.utils.data import DataLoader
 from helper import list_of_ints, ImageDataset
 from model import ConvNeuralNet
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 def train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, valid_dataloader, use_wandb):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     for epoch in range(n_epochs):
         train_acc = 0
@@ -48,10 +48,11 @@ def train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, vali
                 xb = xb.to(device)
                 yb = yb.to(device)
                 y_pred = model(xb)
+                val_loss = loss_fn(y_pred, yb)
                 valid_acc += (torch.argmax(y_pred, 1) == yb).float().sum()
                 cnt += len(yb)
                 # log loss
-                valid_loss.append(loss.detach().item())
+                valid_loss.append(val_loss.detach().item())
             valid_acc /= cnt
             valid_loss = np.array(valid_loss).mean()
 
@@ -68,6 +69,19 @@ def train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, vali
             })
     del loss
     torch.cuda.empty_cache()
+
+def test(model, test_dataloader):
+    test_acc = 0
+    cnt = 0
+    with torch.no_grad():
+        for xb, yb in test_dataloader:
+            xb = xb.to(device)
+            yb = yb.to(device)
+            y_pred = model(xb)
+            test_acc += (torch.argmax(y_pred, 1) == yb).float().sum()
+            cnt += len(yb)
+        test_acc /= cnt
+    print("Test Accuracy: %.2f%%" % (test_acc))
 
 def wandb_sweep():
     with wandb.init() as run:
@@ -206,7 +220,7 @@ def main(args: argparse.Namespace):
         n_epochs = args.n_epochs
 
         train(model, loss_fn, optimizer, scheduler, n_epochs, train_dataloader, valid_dataloader, False)
-            
+        test(model, test_dataloader)
 
 
 if __name__ == "__main__":

@@ -165,6 +165,7 @@ dataset/
 
 # checkpoints
 partA/checkpoints/
+partB/checkpoints/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

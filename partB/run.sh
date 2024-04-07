@@ -4,14 +4,14 @@ wandb_project=CS6910-Assignment2
 wandb_entity=arjungangwar
 dataset_path=dataset/inaturalist_12K/
 in_dims=224
-batch_size=64
+batch_size=128
 data_aug=true
-dense_size=512
-dropout=0.5
-weight_decay=0.005
+dense_size=256
+dropout=0.2
+weight_decay=0
 n_epochs=10
 learning_rate=1e-4
-freeze_option=0
+freeze_option=1
 
 opts=
 if ${use_wandb}; then 
