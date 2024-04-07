@@ -284,7 +284,7 @@ if __name__ == "__main__":
 
     # prepare data
     dataset_path = os.path.abspath(args.dataset_path)
-    sets = ["train", "test"]
+    sets = ["train", "val"]
     classes = [f for f in os.listdir(os.path.join(dataset_path, sets[0])) if not f.startswith(".")]
     labels_to_idx = {c:idx for idx, c in enumerate(classes)}
     idx_to_labels = {v:k for k,v in labels_to_idx.items()}
@@ -305,7 +305,7 @@ if __name__ == "__main__":
                 ytrain += [labels_to_idx[cls]] * k
                 xvalid += images[k:n_images]
                 yvalid += [labels_to_idx[cls]] * (n_images - k)
-            elif set == "test":
+            elif set == "val":
                 xtest += images
                 ytest += [labels_to_idx[cls]] * n_images
 
